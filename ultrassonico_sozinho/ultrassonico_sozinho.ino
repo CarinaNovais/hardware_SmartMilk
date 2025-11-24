@@ -1,3 +1,14 @@
+// FIAÇÃO 
+
+// R1 = 5.6k (resistor superior)
+// Terminal 1 → pino ECHO do JSN-SR04T (5V)
+// Terminal 2 → junção com: Terminal 1 do resistor de 10k (R2) E GPIO4 do ESP32 (entrada do ECHO)
+
+
+// R2 = 10k (resistor inferior)
+// Terminal 1 → junção com: Terminal 2 do 5.6k E GPIO4 
+// Terminal 2 → GND
+
 // ===== CONFIGURAÇÕES E VARIÁVEIS DO ULTRASSÔNICO =====
 #define PIN_TRIG 14
 #define PIN_ECHO 4
