@@ -1,12 +1,14 @@
 // ===== ESP32 B COMPLETO: MQTT + LCD + pH + Temp + Turbidez + TDS =====
 // Foco na estabilidade da comunicação e correções de lógica nos sensores.
-
+#include <Wire.h>
 #include <WiFi.h>
+#include <Adafruit_ADS1X15.h>
 #include <PubSubClient.h>
 #include <SPI.h>
 #include <U8g2lib.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+
 
 // ===== CONSTANTES GLOBAIS =====
 const float VREF = 3.3f;
@@ -31,11 +33,12 @@ PubSubClient client(espClient);
 
 // ===== PINOS DOS SENSORES =====
 #define ONE_WIRE_BUS 27    // DS18B20
-const int pinPh = 32;      // Sensor de pH
-const int pinTurbidez = 33;// Sensor de Turbidez 
-const int pinTDS = 34;     // Sensor TDS
+// const int pinPh = 32;      // Sensor de pH
+// const int pinTurbidez = 33;// Sensor de Turbidez 
+// const int pinTDS = 34;     // Sensor TDS
 
 // ===== OBJETOS =====
+Adafruit_ADS1115 ads;
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 // LCD Display ST7920 (SPI Software: Clock=18, Data=4, CS=5, Reset=26)
@@ -61,56 +64,53 @@ String statusCondutividade = "N/A"; // NOVO: Variável para status de Condutivid
 
 // Função para arredondar
 float ArredondarPara(float ValorEntrada, int CasaDecimal) {
-  float multiplicador = powf(10.0f, CasaDecimal);
-  return roundf(ValorEntrada * multiplicador) / multiplicador;
+float multiplicador = powf(10.0f, CasaDecimal);
+return roundf(ValorEntrada * multiplicador) / multiplicador;
 }
 
 // Filtro Mediano (max_size 21 para o TDS)
 int medianFilter(int samples[], int size) {
   // CORRIGIDO: O array temporário deve ser grande o suficiente.
-  int temp[21]; 
-  if (size > 21) size = 21; // Garantir que não exceda o buffer
-  
-  for (int i = 0; i < size; ++i) temp[i] = samples[i];
-  
+int temp[21]; 
+if (size > 21) size = 21; // Garantir que não exceda o buffer
+for (int i = 0; i < size; ++i) temp[i] = samples[i];
   // Bubble Sort
-  for (int i = 0; i < size-1; ++i) {
-    for (int j = 0; j < size-1-i; ++j) {
-      if (temp[j] > temp[j+1]) {
-        int t = temp[j]; temp[j] = temp[j+1]; temp[j+1] = t;
-      }
-    }
-  }
-  return temp[size/2];
+for (int i = 0; i < size-1; ++i) {
+for (int j = 0; j < size-1-i; ++j) {
+if (temp[j] > temp[j+1]) {
+int t = temp[j]; temp[j] = temp[j+1]; temp[j+1] = t;
+}
+}
+}
+ return temp[size/2];
 }
 
 // ===== FUNÇÕES DE LEITURA DE SENSORES =====
 
 // Leitura de pH (CORRIGIDO: Fórmula de calibração)
 void lerPh() {
-  float leituraAnalogPh = analogRead(pinPh);
-  float voltagemPH = leituraAnalogPh * (VREF / ADC_MAX);
-  
+float leituraAnalogPh = analogRead(pinPh);
+float voltagemPH = leituraAnalogPh * (VREF / ADC_MAX); 
   // CORREÇÃO DA FÓRMULA DE PH: 
   // Assumindo calibração linear: pH = 7.0 + ((V_Meio - V_Lido) / Slope)
   // Onde V_Meio (pH 7.0) é tipicamente 1.65V (metade de 3.3V) e Slope é ~0.18V/pH.
-  PhFinal = 7.0 + ((1.65f - voltagemPH) / 0.18f); 
-  PhFinal = ArredondarPara(PhFinal, 2);
+ PhFinal = 7.0 + ((1.65f - voltagemPH) / 0.18f); 
+PhFinal = ArredondarPara(PhFinal, 2);
 
-  statusPh = (PhFinal >= 6.4 && PhFinal <= 7.0) ? "Adequado" : "Inadequado";
+statusPh = (PhFinal >= 6.4 && PhFinal <= 7.0) ? "Adequado" : "Inadequado";
 }
 
 // Leitura Turbidez (CORRIGIDO: Redução das amostras)
 void lerTurbidez() {
-  float voltagem = 0;
-  for (int i = 0; i < NUM_SAMPLES_TURB; i++) {
-    voltagem += (analogRead(pinTurbidez) / (float)ADC_MAX) * VREF;
-  }
+  float voltagem = 0;
+for (int i = 0; i < NUM_SAMPLES_TURB; i++) {
+voltagem += (analogRead(pinTurbidez) / (float)ADC_MAX) * VREF;
+}
   // CORRIGIDO: Divisão correta pela quantidade de amostras
-  voltagem = voltagem / (float)NUM_SAMPLES_TURB;
-  voltagem = ArredondarPara(voltagem, 2);
+ voltagem = voltagem / (float)NUM_SAMPLES_TURB;
+voltagem = ArredondarPara(voltagem, 2);
 
-  float ntu = 0;
+float ntu = 0;
   // Polinômio baseado no sensor (mantido, mas pode precisar de ajuste fino)
   if (voltagem < 2.5) {
     ntu = 3000;
@@ -229,6 +229,7 @@ void reconnect() {
 // ===== SETUP =====
 void setup() {
   Serial.begin(115200);
+
   
   // Configuração ADC
   analogReadResolution(12);
