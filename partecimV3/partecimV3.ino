@@ -7,15 +7,22 @@
 #include <SPI.h>
 #include <LoRa.h>
 
+//identificacao tanquw
+#define TANQUE_ID 5 
+#define REGIAO_ID 1
+
 // ================= CONTROLE DE TEMPO =================
 unsigned long ultimoEnvio = 0;
 const unsigned long intervaloEnvio = 4000; // 4s
-unsigned long ultimoTick = 0;
-int contagem = 4;
+
+//unsigned long ultimoTick = 0;
+//int contagem = 4;
 
 // ================= MQ2 / MQ135 =================
 #define MQ2_PIN 34
 #define MQ135_PIN 35
+float metano_pct = 0, amonia_pct = 0;
+float distancia_valida = 25.0f;
 const float R1 = 20000.0;
 const float R2 = 10000.0;
 const float ADC_MAX = 4095.0;
@@ -28,18 +35,25 @@ const int calibTime = 5000;
 Adafruit_CCS811 ccs;
 
 // ================= ULTRASSÔNICO =================
-#define TRIG 14
-#define ECHO 27
+#define TRIG 25
+#define ECHO 32
 float distancia = 0;
+
+//
+const float ALTURA_TANQUE_CM = 25.0;       // altura interna total do balde
+const float DIAMETRO_TANQUE_CM = 30.0;     //(diâmetro interno do balde)
 
 // ================= UART ESP2 =================
 #define RX2 16
 #define TX2 17
-String recebido = "";
+
+//String recebido = "";
+
+// dados q vem do esp 2 
 float rx_temp = 0;
-float rx_tds  = 0;
+float rx_tds_cond  = 0;
 float rx_ph   = 0;
-float rx_ntu  = 0;
+float rx_turbidez  = 0;
 
 // ================= LORA =================
 #define LORA_SCK  18
@@ -47,14 +61,15 @@ float rx_ntu  = 0;
 #define LORA_MOSI 23
 #define LORA_SS   5
 #define LORA_RST  26
-#define LORA_DIO0 2
-#define LORA_FREQ 868E6
+#define LORA_DIO0 33
+#define LORA_FREQ 915E6
 
 // ================= FUNÇÕES AUXILIARES =================
 float readSensor(int pin) {
   int raw = analogRead(pin);
   float Vout = (raw / ADC_MAX) * VCC;
-  return Vout * (R1 + R2) / R2;
+  return Vout;
+  //return Vout * (R1 + R2) / R2;
 }
 
 float getRs(float Vin) {
@@ -70,6 +85,25 @@ bool getCampo(String s, String chave, float &dest) {
   if (f < 0) f = s.length();
   dest = s.substring(i, f).toFloat();
   return true;
+}
+
+float nivelCmFromDist(float dist_cm, float altura_cm) {
+  if (dist_cm <= 0) return 0;
+  float h = altura_cm - dist_cm;
+  if (h < 0) h = 0;
+  if (h > altura_cm) h = altura_cm;
+  return h;
+}
+
+float litrosFromNivel(float nivel_cm, float diametro_cm) {
+  float r = diametro_cm / 2.0;
+  float volume_cm3 = 3.14159265 * r * r * nivel_cm;
+  return volume_cm3 / 1000.0; // cm³ -> litros
+}
+
+float litrosFromDist(float dist_cm, float altura_cm, float diametro_cm) {
+  float nivel_cm = nivelCmFromDist(dist_cm, altura_cm);
+  return litrosFromNivel(nivel_cm, diametro_cm);
 }
 
 // ================= SETUP =================
@@ -115,35 +149,60 @@ void setup() {
 
 // ================= LOOP =================
 void loop() {
+
   // Sensores locais
   float Rs_MQ2   = getRs(readSensor(MQ2_PIN));
   float Rs_MQ135 = getRs(readSensor(MQ135_PIN));
-  float ch4_pct  = constrain((1 - Rs_MQ2/R0_MQ2) * 100, 0, 100);
-  float nh3_pct  = constrain((1 - Rs_MQ135/R0_MQ135) * 100, 0, 100);
 
-  static float co2=0, tvoc=0;
+  if (R0_MQ2 > 0) metano_pct  = constrain((1 - Rs_MQ2/R0_MQ2) * 100, 0, 100);
+  if (R0_MQ135 > 0) amonia_pct  = constrain((1 - Rs_MQ135/R0_MQ135) * 100, 0, 100);
+
+ static float co2 = 0;
   if (ccs.available() && !ccs.readData()) {
-    co2 = ccs.geteCO2();
-    tvoc = ccs.getTVOC();
+    co2 = ccs.geteCO2();  // CO2 (eCO2) do CCS811
   }
 
-  // Ultrassônico
-  digitalWrite(TRIG,HIGH); delayMicroseconds(10); digitalWrite(TRIG,LOW);
-  long dur = pulseIn(ECHO,HIGH,30000);
-  distancia = dur>0 ? dur*0.0343/2 : 0;
+  
+  // ultrassonico (distancia do sensor ate a superficie)
+  // ultrassonico
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
 
-  // Envio a cada 4s
+  long dur = pulseIn(ECHO, HIGH, 30000);
+  float d = (dur > 0) ? (dur * 0.0343f / 2.0f) : 0.0f;
+
+  if (dur > 0 && d >= 25.0f && d <= 250.0f) {
+    distancia_valida = d;
+  }
+  distancia = distancia_valida;
+
+  // CALIBRAÇÃO: distância medida quando o tanque está vazio
+  const float DIST_VAZIO_CM = 25.0f; 
+  float nivel_cm = DIST_VAZIO_CM - distancia;
+  if (nivel_cm < 0) nivel_cm = 0;
+  if (nivel_cm > DIST_VAZIO_CM) nivel_cm = DIST_VAZIO_CM;
+
+
+  // litros (cilindro)
+  float nivel_litros = litrosFromNivel(nivel_cm, DIAMETRO_TANQUE_CM);
+  Serial.printf("US: dur=%ld us | d=%.1f cm | dist_valida=%.1f cm | nivel_cm=%.1f\n",
+              dur, d, distancia_valida, nivel_cm);
+
+
+
+  // envio a cada 4s
   if (millis()-ultimoEnvio >= intervaloEnvio) {
     ultimoEnvio = millis();
-    contagem = 4;
 
     // Envia para ESP2
     String pacoteESP1 =
-      "CH4:" + String(ch4_pct,0) + ";" +
-      "NH3:" + String(nh3_pct,0) + ";" +
-      "CO2:" + String(co2,0) + ";" +
-      "TVOC:" + String(tvoc,0) + ";" +
-      "DIST:" + String(distancia,1);
+      "metano:" + String(metano_pct,0) + ";" +
+      "amonia:" + String(amonia_pct,0) + ";" +
+      "co2:" + String(co2,0) + ";" +
+      "nivel:" + String(nivel_litros,1);
 
     Serial2.println(pacoteESP1);
     Serial.println("[ESP1] TX -> ESP2: " + pacoteESP1);
@@ -162,33 +221,36 @@ void loop() {
 
     if (respostaESP2.length()==0) {
       Serial.println("⚠ ESP2 não respondeu");
-      return;
+      //return;
     }
 
     // Parse ESP2
-    getCampo(respostaESP2,"TEMP:",rx_temp);
-    getCampo(respostaESP2,"TDS:", rx_tds);
-    getCampo(respostaESP2,"NTU:", rx_ntu);
-    getCampo(respostaESP2,"PH:", rx_ph);
+    getCampo(respostaESP2,"temp:",rx_temp);
+    getCampo(respostaESP2,"tds_cond:", rx_tds_cond);
+    getCampo(respostaESP2,"turbidez:", rx_turbidez);
+    getCampo(respostaESP2,"ph:", rx_ph);
 
     // Serial debug
     Serial.println("\n===== ESP1 (LOCAL) =====");
-    Serial.printf("CH4: %.0f%% | NH3: %.0f%% | CO2: %.0f | TVOC: %.0f | DIST: %.1f\n",
-                  ch4_pct, nh3_pct, co2, tvoc, distancia);
+    Serial.printf("metano: %.0f%% | amonia: %.0f%% | co2: %.0f  | nivel: %.1f L\n", 
+    metano_pct, amonia_pct, co2, nivel_litros);
+
     Serial.println("===== ESP2 =====");
-    Serial.printf("TEMP: %.2f | TDS: %.0f | NTU: %.0f | PH: %.2f\n",
-                  rx_temp, rx_tds, rx_ntu, rx_ph);
+    Serial.printf("temp: %.2f | tds_cond: %.0f | turbidez: %.0f | PH: %.2f\n",
+                  rx_temp, rx_tds_cond, rx_turbidez, rx_ph);
 
     // Envia LoRa
     String pacoteLoRa =
-      "TEMP:" + String(rx_temp,2) + ";" +
-      "TDS:"  + String(rx_tds,0)  + ";" +
-      "NTU:"  + String(rx_ntu,0)  + ";" +
-      "PH:"   + String(rx_ph,2)   + ";" +
-      "CH4:"  + String(ch4_pct,0) + ";" +
-      "NH3:"  + String(nh3_pct,0) + ";" +
-      "CO2:"  + String(co2,0)     + ";" +
-      "DIST:" + String(distancia,1);
+      "tanque:" + String(TANQUE_ID)+";"+
+      "regiao:" + String(REGIAO_ID) + ";" +
+      "temp:" + String(rx_temp,2) + ";" +
+      "condutividade:"  + String(rx_tds_cond,0)  + ";" +
+      "turbidez:"  + String(rx_turbidez,0)  + ";" +
+      "ph:"   + String(rx_ph,2)   + ";" +
+      "metano:"  + String(metano_pct,0) + ";" +
+      "amonia:"  + String(amonia_pct,0) + ";" +
+      "co2:"  + String(co2,0)     + ";" +
+      "nivel:" + String(nivel_litros,1);
 
     LoRa.beginPacket();
     LoRa.print(pacoteLoRa);
