@@ -1,8 +1,7 @@
 /*
  * SENSOR TDS / CONDUTIVIDADE NO ESP32
- * Código limpo e funcional
  */
-// Resistor R1 (5.6k)
+// Resistor R1 (10k)
 // Terminal 1 → AOUT do sensor TDS
 // Terminal 2 → Nó VOUT (onde liga R2 e o ESP32)
 
@@ -35,11 +34,11 @@ float calibrationFactorTDS = 1.00f;
 float tdsFinal = 0;
 String statusCondutividade = "N/A";
 
-
 // ========================================================
 // === FUNÇÃO FILTRO DE MEDIANA ===
 // ========================================================
-int medianFilter(int *arr, int n) {
+int medianFilter(int *arr, int n)
+{
   int temp[n];
 
   // copia
@@ -47,9 +46,12 @@ int medianFilter(int *arr, int n) {
     temp[i] = arr[i];
 
   // ordena
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = i + 1; j < n; j++) {
-      if (temp[j] < temp[i]) {
+  for (int i = 0; i < n - 1; i++)
+  {
+    for (int j = i + 1; j < n; j++)
+    {
+      if (temp[j] < temp[i])
+      {
         int aux = temp[i];
         temp[i] = temp[j];
         temp[j] = aux;
@@ -58,21 +60,24 @@ int medianFilter(int *arr, int n) {
   }
 
   // retorna mediana
-  if (n % 2 == 1) return temp[n / 2];
-  else return (temp[n/2] + temp[n/2 - 1]) / 2;
+  if (n % 2 == 1)
+    return temp[n / 2];
+  else
+    return (temp[n / 2] + temp[n / 2 - 1]) / 2;
 }
-
 
 // ========================================================
 // === FUNÇÃO DE LEITURA TDS ===
 // temperaturaAtual = temperatura da água (°C)
 // ========================================================
-void lerTDS(float temperaturaAtual) {
+void lerTDS(float temperaturaAtual)
+{
 
   int readings[NUM_MEDIAN_TDS];
 
   // coleta leituras
-  for (int i = 0; i < NUM_MEDIAN_TDS; i++) {
+  for (int i = 0; i < NUM_MEDIAN_TDS; i++)
+  {
     readings[i] = analogRead(pinTDS);
     delay(20);
   }
@@ -84,35 +89,38 @@ void lerTDS(float temperaturaAtual) {
   float voltage = ((float)med / ADC_MAX) * VREF;
 
   // polinômio do conversor TDS
-  float tdsValue = 133.42f * pow(voltage, 3) 
-                   - 255.86f * pow(voltage, 2) 
-                   + 857.39f * voltage;
+  float tdsValue = 133.42f * pow(voltage, 3) - 255.86f * pow(voltage, 2) + 857.39f * voltage;
 
   // calibração
   tdsValue *= calibrationFactorTDS;
 
   // compensação da temperatura
-  float k = 0.02f;  
+  float k = 0.02f;
   float tdsCompensado = tdsValue / (1 + k * (temperaturaAtual - 25.0f));
 
   // garante valores positivos
   tdsFinal = (tdsCompensado < 0) ? 0 : tdsCompensado;
 
   // classificação
-  if (tdsFinal < 300) {
+  if (tdsFinal < 300)
+  {
     statusCondutividade = "Baixo";
-  } else if (tdsFinal < 1000) {
+  }
+  else if (tdsFinal < 1000)
+  {
     statusCondutividade = "Medio";
-  } else {
+  }
+  else
+  {
     statusCondutividade = "Alto";
   }
 }
 
-
 // ========================================================
 // === SETUP ===
 // ========================================================
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   delay(500);
 
@@ -121,11 +129,11 @@ void setup() {
   Serial.println("Sensor TDS iniciado!");
 }
 
-
 // ========================================================
 // === LOOP ===
 // ========================================================
-void loop() {
+void loop()
+{
 
   // coloque a temperatura real do seu sensor depois
   float temperaturaAtual = 25.0;

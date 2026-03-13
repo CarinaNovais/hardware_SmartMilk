@@ -1,13 +1,4 @@
-// FIAÇÃO 
 
-// R1 = 5.6k (resistor superior)
-// Terminal 1 → pino ECHO do JSN-SR04T (5V)
-// Terminal 2 → junção com: Terminal 1 do resistor de 10k (R2) E GPIO4 do ESP32 (entrada do ECHO)
-
-
-// R2 = 10k (resistor inferior)
-// Terminal 1 → junção com: Terminal 2 do 5.6k E GPIO4 
-// Terminal 2 → GND
 
 // ===== CONFIGURAÇÕES E VARIÁVEIS DO ULTRASSÔNICO =====
 #define PIN_TRIG 14
@@ -31,19 +22,19 @@ float litros = 0.0f;
 float raio_cm = 9.0f;           // cm
 float altura_tanque_cm = 18.5f; // cm
 
-
 // =======================================================
 //  Função clamp - impede valores negativos
 // =======================================================
-float clampFloorZero(float x) {
+float clampFloorZero(float x)
+{
   return (x < 0.0f) ? 0.0f : x;
 }
-
 
 // =======================================================
 //  Mede distância com o JSN-SR04T
 // =======================================================
-float measureDistanceCm() {
+float measureDistanceCm()
+{
   digitalWrite(PIN_TRIG, LOW);
   delayMicroseconds(2);
   digitalWrite(PIN_TRIG, HIGH);
@@ -52,77 +43,89 @@ float measureDistanceCm() {
 
   unsigned long duration = pulseIn(PIN_ECHO, HIGH, TIMEOUT_US);
 
-  if (duration == 0) {
+  if (duration == 0)
+  {
     return -1.0f; // timeout
   }
 
   return (duration * SOUND_CM_PER_US) / 2.0f;
 }
 
-
 // =======================================================
 //  Faz média móvel da distância
 // =======================================================
-float getSmoothedDistance() {
+float getSmoothedDistance()
+{
   float d = measureDistanceCm();
 
-  if (d >= 0.0f) {
+  if (d >= 0.0f)
+  {
     samples[sampleIndex] = d;
     sampleIndex++;
 
-    if (sampleIndex >= NUM_SAMPLES) {
+    if (sampleIndex >= NUM_SAMPLES)
+    {
       sampleIndex = 0;
       samplesFilled = true;
     }
-  } else {
+  }
+  else
+  {
     if (!samplesFilled && sampleIndex == 0)
       return -1.0f;
   }
 
   int count = samplesFilled ? NUM_SAMPLES : sampleIndex;
-  if (count == 0) return -1.0f;
+  if (count == 0)
+    return -1.0f;
 
   float sum = 0.0f;
   int valid = 0;
 
-  for (int i = 0; i < count; ++i) {
-    if (samples[i] > 0) {
+  for (int i = 0; i < count; ++i)
+  {
+    if (samples[i] > 0)
+    {
       sum += samples[i];
       valid++;
     }
   }
 
-  if (valid == 0) return -1.0f;
+  if (valid == 0)
+    return -1.0f;
 
   return sum / float(valid);
 }
 
-
 // =======================================================
 //  Atualiza distância, altura e litros (função principal)
 // =======================================================
-void updateVolume() {
+void updateVolume()
+{
   float leituraNova = getSmoothedDistance();
 
-  if (leituraNova >= 0.0f) {
+  if (leituraNova >= 0.0f)
+  {
     distancia = leituraNova;
-  } else {
+  }
+  else
+  {
     Serial.println("Erro: timeout ultrassônico");
   }
 
   altura_agua = clampFloorZero(altura_tanque_cm - distancia);
 
   float volume_cm3 =
-    3.14159f * raio_cm * raio_cm * altura_agua;
+      3.14159f * raio_cm * raio_cm * altura_agua;
 
   litros = volume_cm3 / 1000.0f;
 }
 
-
 // =======================================================
 //  SETUP
 // =======================================================
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   pinMode(PIN_TRIG, OUTPUT);
@@ -131,11 +134,11 @@ void setup() {
   Serial.println("Sensor ultrassonico iniciado!");
 }
 
-
 // =======================================================
 //  LOOP
 // =======================================================
-void loop() {
+void loop()
+{
   updateVolume();
 
   Serial.print("Distancia: ");

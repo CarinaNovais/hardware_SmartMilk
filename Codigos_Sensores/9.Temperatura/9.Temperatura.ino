@@ -54,9 +54,6 @@ void lerTemperatura()
         {
             statusTemp = "Ruim";
         }
-
-        // mesma lógica acima usando operador ternário
-        // statusTemp = (tempC > 0 && tempC <= 25) ? "Boa" : "Ruim";
     }
 }
 
@@ -83,8 +80,7 @@ void loop()
 {
 
     // ----------------------------------------------------
-    // CÓDIGO DE DIAGNÓSTICO DO SENSOR (OPCIONAL)
-    // Descomente para verificar se o DS18B20 está sendo detectado
+    // verificar se o DS18B20 está sendo detectado
     // ----------------------------------------------------
 
     /*
