@@ -1,54 +1,40 @@
 #include <SPI.h>
 #include <LoRa.h>
 
-// Pinos LoRa
-#define LORA_SCK  18
+#define LORA_SCK 18
 #define LORA_MISO 19
 #define LORA_MOSI 23
-#define LORA_SS   5
-#define LORA_RST  26
-#define LORA_DIO0 2
+#define LORA_SS 5
+#define LORA_RST 26
+#define LORA_DIO0 33
+#define LORA_FREQ 915E6
 
-// Frequência
-#define LORA_FREQ 868E6
-
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  while (!Serial);
+  delay(2000);
 
   Serial.println("Inicializando LoRa...");
 
+  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
-  if (!LoRa.begin(LORA_FREQ)) {
-    Serial.println("Erro ao iniciar LoRa!");
-    while (true); // Para aqui se não inicializar
+  if (!LoRa.begin(LORA_FREQ))
+  {
+    Serial.println("Erro LoRa");
+    while (1);
   }
 
-  Serial.println("LoRa inicializado com sucesso!");
+  Serial.println("LoRa OK");
 }
 
-int counter = 0;
-
-void loop() {
-  // Envia mensagem
-  String mensagem = "Ola LoRa! Contador: " + String(counter);
+void loop()
+{
   LoRa.beginPacket();
-  LoRa.print(mensagem);
+  LoRa.print("teste lora");
   LoRa.endPacket();
 
-  Serial.println("Mensagem enviada: " + mensagem);
-  counter++;
+  Serial.println("Pacote enviado");
 
-  // Recebe mensagem
-  int packetSize = LoRa.parsePacket();
-  if (packetSize) {
-    Serial.print("Mensagem recebida: ");
-    while (LoRa.available()) {
-      Serial.print((char)LoRa.read());
-    }
-    Serial.println();
-  }
-
-  delay(2000); // Envia a cada 2 segundos
+  delay(2000);
 }

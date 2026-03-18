@@ -130,6 +130,7 @@ void setup()
 
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
+  digitalWrite(PIN_TRIG, LOW); 
 
   Serial.println("Sensor ultrassonico iniciado!");
 }

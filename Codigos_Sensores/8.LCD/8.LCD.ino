@@ -11,5 +11,8 @@ void loop() {
   u8g2.setFont(u8g2_font_6x10_tr);
   u8g2.drawStr(0, 12, "ST7920 OK!");
   u8g2.sendBuffer();
+
+  Serial.println("Mensagem enviada para LCD");
+
   delay(500);
 }
